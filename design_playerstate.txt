@@ -1,0 +1,12 @@
+[0:10]: các lá bài trên tay người chơi
+    0: lá trên tay đã đánh 
+    i: lá i (1<=i<=13)
+    
+[10:20]: bài đã đánh ở trên bàn
+
+[20:24]: trạng thái người chơi
+    0: đánh tiếp
+    -1: bỏ bài
+    
+[24]: lượt chơi
+

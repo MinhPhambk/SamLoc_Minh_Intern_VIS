@@ -1,0 +1,27 @@
+[10*(n-1):10*n]: 10 lá  bài của người chơi n
+    0: lá trên tay đã đánh 
+    i: lá bài có số i(1<=i<=13)
+n = 1, 2, 3, 4
+
+[40:50]: các lá đã đánh ra
+
+[50:54]: trạng thái người chơi
+    0: theo lượt
+    -1: bỏ lượt
+    
+[54]: turn hiện tại
+    turn%4 = 0: người chơi 1 đang đánh
+    turn%4 = 1: người chơi 2 đang đánh
+    turn%4 = 2: người chơi 3 đang đánh
+    turn%4 = 3: người chơi 4 đang đánh
+
+[55]: người chơi báo sâm
+    0: không có ai báo
+    i: người chơi i báo sâm (1<=i<=4, người chơi được báo khi và chỉ khi turn = 0)
+
+[56]: game đã kết thúc hay chưa
+    0: ván đấu tiếp tục
+    1: người chơi 1 thắng
+    2: người chơi 2 thắng
+    3: người chơi 3 thắng
+    4: người chơi 4 thắng

@@ -62,6 +62,10 @@ def getValidActions(player_state):
     board_cards = np.sort(board_cards)
     
     num_cards_on_board = len(board_cards)
+    if 1 in board_cards:
+        for card in range(num_cards_on_board):
+            if card == num_cards_on_board - 1: board_cards[card]
+            else: board_cards[card] = board_cards[card+1]
     
     # Người chơi luôn có thể bỏ lượt
     list_action[-1] = 1
@@ -383,12 +387,21 @@ def run_one_game(p0, list_other, print_mode = False):
     return winner
 
 @njit
-def run_n_game(p0, num_games, print_mode = False):
-    return 0
+def run_n_game(p0, num_game, print_mode = False):
+    win = 0
+    for _n in range(num_game):
+        # if print_mode == False and num_game > 1:
+        #     progress_bar(_n, num_game)
+        list_other = np.append(np.random.choice(np.arange(3), 3, replace = False), -1)
+        np.random.shuffle(list_other)
+        winner  = run_one_game(p0, list_other, print_mode)
+        win += winner
+    print()
+    return win
 
 @njit
-def run_main(p0, n_game, print_mode = False):
-    return 0
+def run_main(p0, num_game, print_mode = False):
+    return run_n_game(p0, num_game, print_mode = False)
 
 @njit
 def visualize_env(env):

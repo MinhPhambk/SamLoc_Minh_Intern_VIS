@@ -16,7 +16,7 @@ CARD_PER_PLAYER = 10
 ENV_SIZE = 57
 STATE_SIZE = 25
 
-@njit(fastmath=True, cache=True)
+@njit
 def initEnv():
     env_state = np.full(ENV_SIZE, 0)
     
@@ -31,7 +31,7 @@ def initEnv():
     
     return env_state
 
-@njit(fastmath=True, cache=True)
+@njit
 def getAgentState(env_state):
     p_state = np.full(STATE_SIZE, 0)
     p_id = env_state[54] % 4
@@ -50,7 +50,7 @@ def getAgentState(env_state):
     
     return p_state
 
-@njit(fastmath=True, cache=True)
+@njit
 def getValidActions(player_state):
     list_action = np.full(NUMBER_ACTIONS, 0)
     list_action_with_cards = np.full(NUMBER_ACTIONS_WITH_CARDS, 0)
@@ -74,7 +74,7 @@ def getValidActions(player_state):
 
         # Lấy danh sách các cách đánh bài có thể
         # Input: player_cards, output: list_action_with_cards
-        if len(player_cards) == 1: list_action_with_cards[player_cards[0]] = 1
+        if len(player_cards) == 1: list_action_with_cards[player_cards[0]-1] = 1
         else:
             list_action_with_cards[player_cards-1] = 1
 
@@ -123,7 +123,7 @@ def getValidActions(player_state):
                     while num_card_idx >= 2:
                         list_action_with_cards[13*(num_card_idx-1)+idx] = 1  
                         num_card_idx -= 1
-        
+
         # So sánh với các lá đã đánh trên bàn để lấy action hợp lệ
         # Input: list_action_with_cards, output: list_action
         
@@ -168,7 +168,7 @@ def getValidActions(player_state):
 
     return list_action
 
-@njit(fastmath=True, cache=True)
+@njit
 def stepEnv(action, env):    
     p_id = env[54] % 4
 
@@ -268,10 +268,12 @@ def stepEnv(action, env):
             else:
                 env[40+idx] = card_remove_start + idx 
                 
-@njit(fastmath=True, cache=True)
+@njit
 def checkEnded(env):
-    p_id = env[54] % 4
-    board_cards = env[40:50].copy()
+    if env[54] == 0: p_id = 0
+    else: p_id = (env[54] - 1) % 4
+    
+    board_cards = env[40:50]
     board_cards = board_cards[np.where(board_cards > 0)[0]]
     board_cards = np.sort(board_cards)
     
@@ -280,52 +282,115 @@ def checkEnded(env):
     for player_ in range(4):
         if env[50+player_] == -1 and player_ != p_id: 
             num_players_aval += 1
-    
+            
     # Trường hợp người chơi đã đánh hết bài
-    if np.sum(env[10*p_id:10*p_id+10]) == 0:        
-        # Nếu thối 2
-        if board_cards[0] == 2 and board_cards[1] == 0 and env[50+p_id] == 0:
-            if num_players_aval == 3:
-                return 5
-            else:
-                env[40:50] = 0
-                env[50+p_id] = -1
-                return -1
-        
-        # Nếu thối tứ quý
-        elif board_cards[0] == board_cards[1] and board_cards[1] == 0 and board_cards[0] != 0 and env[50+p_id] == 0:
-            if num_players_aval == 3:
-                return 5
-            else:
-                env[40:50] = 0
-                env[50+p_id] = -1
-                return -1
-        
+    if np.sum(env[10*p_id:10*p_id+10]) == 0 and len(board_cards) > 0:        
+        # Nếu vừa đánh hết bài xong
+        if env[50+p_id] == 0:
+            # Nếu thối 2
+            if board_cards[0] == 2 and len(board_cards) == 1:
+                if num_players_aval == 3:
+                    return 5
+                else:
+                    env[40:50] = 0
+                    env[50+p_id] = -1
+                    return -1
+
+            # Nếu thối tứ quý
+            elif len(board_cards) == 4 and board_cards[0] == board_cards[1] and board_cards[0] != 0:
+                if num_players_aval == 3:
+                    return 5
+                else:
+                    env[40:50] = 0
+                    env[50+p_id] = -1
+                    return -1
+
         # Nếu đã thối và ván đấu đang tiếp tục
         elif env[50+p_id] == -1:
             return -1
         
-        # Nếu không thối
-        else:
-            return p_id + 1
+        env[56] = 1
+        return p_id + 1
+            
         
     # Nếu người chơi chưa đánh hết bài
     else:
         return -1
 
-@njit(fastmath=True, cache=True)
-def run_one_game(p0, p1, p2, p3, players_order, print_mode = False):
-    return 0
+@njit
+def bot_random(p_state):
+    arr_action = getValidActions(p_state)
+    arr_action = np.where(arr_action == 1)[0]
+    act_idx = np.random.randint(0, len(arr_action))
+    return arr_action[act_idx]
+    
+@njit
+def run_one_game(p0, list_other, print_mode = False):
+    env = np.full(57, 0)
+    env = initEnv()
+    
+    def _print_():
+        print('----------------------------------------------------------------------------------')
+        print('Lượt của người chơi:', env[54] % 4 + 1)
+        print('Các cách đánh bài:', np.where(getValidActions(getAgentState(env))>0)[0])
+        print('Các lá đã đánh trên bàn:', np.sort(env[40:50]), 'Turn:', env[54])
+        print('P1:', np.sort(env[0:10]))
+        print('P2:', np.sort(env[10:20]))
+        print('P3:', np.sort(env[20:30]))
+        print('P4:', np.sort(env[30:40]))
+        print('Người chơi bỏ lượt:', np.sort(env[50:54]))
+        print('-------')
 
-@njit(fastmath=True, cache=True)
+    _cc = 0
+
+    while _cc <= 10000:
+        p_id = env[54] % 4
+        player_state = getAgentState(env)
+
+        if list_other[p_id] == -1:
+            action = p0(player_state)
+        else:
+            action = bot_random(player_state)
+
+        list_action = getValidActions(player_state)
+        if list_action[action] != 1:
+            raise Exception('Action error!')
+
+        if print_mode: _print_()
+
+        stepEnv(action, env)
+
+        if checkEnded(env) != -1:
+            break
+
+        _cc += 1 
+
+    for idx in range(4):
+            if list_other[idx] == -1 and print_mode:
+                print('________Đã kết thúc game__________')
+                _print_()
+                if checkEnded(env) == 5:
+                    print('Ván chơi hoà!')
+                elif np.where(list_other == -1)[0] ==  (checkEnded(env) - 1):
+                    print('Xin chúc mừng bạn là người chiến thắng')
+                else:
+                    print('Người chơi đã thua, chúc bạn may mắn lần sau')
+
+    winner = 0
+    if checkEnded(env) == 5: winner = -1
+    elif np.where(list_other == -1)[0] == (checkEnded(env) - 1): winner = 1
+    else: winner = 0
+    return winner
+
+@njit
 def run_n_game(p0, num_games, print_mode = False):
     return 0
 
-@njit(fastmath=True, cache=True)
+@njit
 def run_main(p0, n_game, print_mode = False):
     return 0
 
-@njit(fastmath=True, cache=True)
+@njit
 def visualize_env(env):
     dict_env = {}
     dict_env['Lượt đánh của người chơi'] = np.asarray([env[54] % 4 + 1])
@@ -335,7 +400,7 @@ def visualize_env(env):
     dict_env['Người chơi 3'] = np.sort(env[20:30])
     dict_env['Người chơi 4'] = np.sort(env[30:40])
     
-    board_cards = env[40:50].copy()
+    board_cards = env[40:50]
     board_cards = board_cards[np.where(board_cards > 0)[0]]
     board_cards = np.sort(board_cards)
     dict_env['Các lá đã đánh'] = board_cards

@@ -32,6 +32,10 @@ def initEnv():
     return env_state
 
 @njit
+def getStateSize():
+    return STATE_SIZE
+
+@njit
 def getAgentState(env_state):
     p_state = np.full(STATE_SIZE, 0)
     p_id = env_state[54] % 4
@@ -49,6 +53,10 @@ def getAgentState(env_state):
     p_state[24] = env_state[54]
     
     return p_state
+
+@njit
+def getActionSize():
+    return ACTION_SIZE
 
 @njit
 def getValidActions(player_state):
@@ -202,7 +210,8 @@ def stepEnv(action, env):
                     env[50+player_] = -1
             # Cập nhật trạng thái các lá trên bàn chơi = rỗng
             env[40:50] = 0  
-        else: env[50+p_id] = -1
+        else: 
+            env[50+p_id] = -1
 
     # # Báo sâm
     # elif action == 0:
@@ -271,7 +280,11 @@ def stepEnv(action, env):
                 env[40+idx] = 1
             else:
                 env[40+idx] = card_remove_start + idx 
-                
+
+@njit
+def getAgentSize():
+    return NUMBER_PLAYERS
+
 @njit
 def checkEnded(env):
     if env[54] == 0: p_id = 0
@@ -321,15 +334,47 @@ def checkEnded(env):
     else:
         return -1
 
-@njit
 def bot_random(p_state):
     arr_action = getValidActions(p_state)
     arr_action = np.where(arr_action == 1)[0]
     act_idx = np.random.randint(0, len(arr_action))
     return arr_action[act_idx]
-    
+
 @njit
-def run_one_game(p0, list_other, print_mode = False):
+def numba_bot_random(p_state):
+    arr_action = getValidActions(p_state)
+    arr_action = np.where(arr_action == 1)[0]
+    act_idx = np.random.randint(0, len(arr_action))
+    return arr_action[act_idx]
+
+def run_one_game(list_Agent):
+    if len(list_Agent) != 4:
+        raise Exception('Agent error')
+    
+    env = np.full(57, 0)
+    env = initEnv()
+
+    _cc = 0
+    while _cc <= 10000:
+        p_idx = env[54] % 4
+        p_state = getAgentState(env)
+
+        action = list_Agent[p_idx](p_state)
+        list_action = getValidActions(p_state)
+        if list_action[action] != 1:
+            raise Exception('Action error')
+
+        stepEnv(action, env)
+
+        if checkEnded(env) != -1:
+            break
+
+        _cc += 1
+
+    return checkEnded(env)
+
+@njit
+def numba_run_one_game(p0, list_other, print_mode = False):
     env = np.full(57, 0)
     env = initEnv()
     
@@ -337,7 +382,12 @@ def run_one_game(p0, list_other, print_mode = False):
         print('----------------------------------------------------------------------------------')
         print('Lượt của người chơi:', env[54] % 4 + 1)
         print('Các cách đánh bài:', np.where(getValidActions(getAgentState(env))>0)[0])
-        print('Các lá đã đánh trên bàn:', np.sort(env[40:50]), 'Turn:', env[54])
+        
+        board_cards = env[40:50]
+        board_cards = board_cards[np.where(board_cards > 0)[0]]
+        board_cards = np.sort(board_cards)
+        print('Các lá đã đánh trên bàn:', board_cards, 'Turn:', env[54])
+
         print('P1:', np.sort(env[0:10]))
         print('P2:', np.sort(env[10:20]))
         print('P3:', np.sort(env[20:30]))
@@ -354,7 +404,7 @@ def run_one_game(p0, list_other, print_mode = False):
         if list_other[p_id] == -1:
             action = p0(player_state)
         else:
-            action = bot_random(player_state)
+            action = numba_bot_random(player_state)
 
         list_action = getValidActions(player_state)
         if list_action[action] != 1:
@@ -370,38 +420,54 @@ def run_one_game(p0, list_other, print_mode = False):
         _cc += 1 
 
     for idx in range(4):
-            if list_other[idx] == -1 and print_mode:
-                print('________Đã kết thúc game__________')
-                _print_()
-                if checkEnded(env) == 5:
-                    print('Ván chơi hoà!')
-                elif np.where(list_other == -1)[0] ==  (checkEnded(env) - 1):
-                    print('Xin chúc mừng bạn là người chiến thắng')
-                else:
-                    print('Người chơi đã thua, chúc bạn may mắn lần sau')
+        if list_other[idx] == -1 and print_mode:
+            print('________Đã kết thúc game__________')
+            _print_()
+            if checkEnded(env) == 5:
+                print('Ván chơi hoà!')
+            elif np.where(list_other == -1)[0] ==  (checkEnded(env) - 1):
+                print('Xin chúc mừng bạn là người chiến thắng')
+            else:
+                print('Người chơi đã thua, chúc bạn may mắn lần sau')
 
     winner = 0
     if checkEnded(env) == 5: winner = -1
     elif np.where(list_other == -1)[0] == (checkEnded(env) - 1): winner = 1
     else: winner = 0
+    
     return winner
 
+def run_game(list_Agent, num_game):
+    if len(list_Agent) != 4:
+        raise Exception('Agent error')
+
+    win = np.full(4, 0)
+    list_idx = np.array([0, 1, 2, 3])
+
+    for _n in range(num_game):
+        # if print_mode == False and num_game > 1:
+        #     progress_bar(_n, num_game)
+        np.random.shuffle(list_idx)
+        winner  = run_one_game([list_Agent[list_idx[0]], list_Agent[list_idx[1]], list_Agent[list_idx[2]], list_Agent[list_idx[3]]])
+        if winner != 5: win[list_idx[winner-1]] += 1
+    return win
+
 @njit
-def run_n_game(p0, num_game, print_mode = False):
+def numba_run_n_game(p0, num_game, print_mode = False):
     win = 0
     for _n in range(num_game):
         # if print_mode == False and num_game > 1:
         #     progress_bar(_n, num_game)
         list_other = np.append(np.random.choice(np.arange(3), 3, replace = False), -1)
         np.random.shuffle(list_other)
-        winner  = run_one_game(p0, list_other, print_mode)
-        win += winner
+        winner  = numba_run_one_game(p0, list_other, print_mode)
+        if winner != -1: win += winner
     print()
     return win
 
 @njit
-def run_main(p0, num_game, print_mode = False):
-    return run_n_game(p0, num_game, print_mode = False)
+def numba_run_main(p0, num_game, print_mode = False):
+    return numba_run_n_game(p0, num_game, print_mode)
 
 @njit
 def visualize_env(env):

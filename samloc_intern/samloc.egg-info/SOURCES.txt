@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+samloc/__init__.py
+samloc.egg-info/PKG-INFO
+samloc.egg-info/SOURCES.txt
+samloc.egg-info/dependency_links.txt
+samloc.egg-info/top_level.txt
